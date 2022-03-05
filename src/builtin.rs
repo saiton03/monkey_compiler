@@ -1,7 +1,5 @@
-use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Formatter;
-use crate::ast::Statement;
 use crate::evaluator::new_error;
 use crate::object::Object;
 

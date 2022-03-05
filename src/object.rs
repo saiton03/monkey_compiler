@@ -4,7 +4,6 @@ use std::fmt::Formatter;
 use crate::ast::{Expression, Statement};
 use crate::builtin::BuiltinFunction;
 use crate::environment::Environment;
-use crate::evaluator::Evaluator;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct KeyValue {

@@ -1,12 +1,9 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::fs::read_to_string;
 use std::rc::Rc;
 use crate::ast::{Expression, Node, Program, Statement};
-use crate::ast::Expression::PrefixExpression;
-use crate::builtin::{BuiltinFunction};
+use crate::builtin::BuiltinFunction;
 use crate::object::{HashKey, KeyValue, Object};
-use crate::object::Object::Hash;
 use crate::environment::Environment;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]

@@ -1,7 +1,6 @@
 use core::fmt;
 use std::collections::BTreeMap;
-use std::fmt::{format, Formatter, write};
-use std::ops::Deref;
+use std::fmt::Formatter;
 use crate::ast::{Expression, Program, Statement};
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
@@ -45,8 +44,6 @@ fn get_precedence(token: TokenType) -> Option<Precedence> {
     }
 }
 
-type PrefixParseFn = fn(&mut Parser) -> Option<Expression>;
-type InfixParseFn = fn(Expression) -> Option<Expression>;
 
 pub struct Parser {
     l: Lexer,
@@ -115,9 +112,6 @@ impl Parser {
             }))
     }
 
-    fn no_prefix_fn_error(&mut self, t: TokenType) {
-        self.errors.push(format!("no prefix function for {} found", t))
-    }
 
     pub fn parse_program(&mut self) -> Program {
         let mut p = Program{

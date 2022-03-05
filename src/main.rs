@@ -12,8 +12,8 @@ mod builtin;
 mod repl;
 mod environment;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let reader = stdin();
     let writer = stdout();
-    repl::start(reader, writer);
+    repl::start(reader, writer)
 }
