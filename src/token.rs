@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{Formatter, write};
+use std::fmt::{Formatter};
 
 #[derive(Debug,Ord, PartialOrd, Eq, PartialEq, Clone, Copy)]
 pub enum TokenType {

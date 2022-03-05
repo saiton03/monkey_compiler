@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use std::rc::Rc;
@@ -6,43 +7,32 @@ use crate::ast::Expression::PrefixExpression;
 use crate::builtin::{BuiltinFunction};
 use crate::object::{HashKey, KeyValue, Object};
 use crate::object::Object::Hash;
+use crate::environment::Environment;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Evaluator {
-    store: BTreeMap<String, Object>,
-    outer: Option<Box<Evaluator>>,
+    env: Rc<RefCell<Environment>>
 }
 
 impl Evaluator {
     pub fn new() -> Self {
-        let store = BTreeMap::new();
         Self {
-            store,
-            outer: None,
+            env: Rc::new(RefCell::new(Environment::new()))
         }
     }
 
-    pub fn new_outer(&self) -> Self {
-        let store = BTreeMap::new();
+    pub fn from(env: Environment) -> Self {
         Self {
-            store,
-            outer: Some(Box::new(self.clone()))
+            env: Rc::new(RefCell::new(env))
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<&Object> {
-        match self.store.get(name){
-            Some(obj) => Some(obj),
-            None => match &self.outer {
-                Some(env) => env.get(name),
-                None => None,
-            }
-        }
+    pub fn get(&self, key: &str) -> Option<Object> {
+        self.env.borrow().get(key)
     }
 
-    pub fn set(&mut self, name: String, val: Object) -> Object {
-        self.store.insert(name, val.clone());
-        val
+    fn set(&mut self, key: String, value: Object) {
+        self.env.borrow_mut().set(key, value)
     }
 
     pub fn eval(&mut self, node: Node) -> Option<Object> {
@@ -64,7 +54,10 @@ impl Evaluator {
                         return Some(val);
                     }
                     match identifier {
-                        Expression::Identifier(s) => Some(self.set(s, val)),
+                        Expression::Identifier(s) => {
+                            self.set(s, val.clone());
+                            Some(val)
+                        },
                         _ => None,
                     }
                 }
@@ -94,10 +87,11 @@ impl Evaluator {
                 Expression::IfExpression{..} => self.eval_if_expression(exp),
                 Expression::Identifier(s) => self.eval_identifier(s),
                 Expression::Function {parameters, body} => {
+                    let env = Rc::clone(&self.env);
                     Some(Object::Function {
                         parameters,
                         body: *body,
-                        env: Box::from(self.new_outer()),
+                        env: Environment::virtual_environment(env),
                     })
                 },
                 Expression::CallExpression {function, arguments} => {
@@ -342,15 +336,15 @@ fn eval_string_infix_expression(operation: String, left: &String, right: &String
 fn apply_function( function: Object, args: Vec<Object>) -> Option<Object> {
     match function {
         Object::Function {parameters, body, env} => {
-            let mut outer = env.new_outer();
+            let mut eval = Evaluator::from(env);
             // argument expansion
             for (i, param) in parameters.iter().enumerate() {
                 if let Expression::Identifier(param) = param {
-                    outer.set(param.to_string(), args[i].clone());
+                    eval.set(param.to_string(), args[i].clone());
                 }
             }
 
-            match outer.eval(Node::Statement(body)) {
+            match eval.eval(Node::Statement(body)) {
                 None => None,
                 Some(obj) => match obj {
                     Object::ReturnValue(exp) => {

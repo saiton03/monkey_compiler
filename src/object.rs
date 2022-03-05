@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use crate::ast::{Expression, Statement};
 use crate::builtin::BuiltinFunction;
+use crate::environment::Environment;
 use crate::evaluator::Evaluator;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -53,7 +54,7 @@ pub enum Object {
     Function{
         parameters: Vec<Expression>,
         body: Statement,
-        env: Box<Evaluator>,
+        env: Environment,
     },
     Builtin(BuiltinFunction),
     Array(Vec<Object>),

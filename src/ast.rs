@@ -2,7 +2,6 @@ use std::string::String;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Formatter;
-use crate::token::Token;
 
 pub enum Node {
     Program(Program),

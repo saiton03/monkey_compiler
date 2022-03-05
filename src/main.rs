@@ -10,6 +10,7 @@ mod object;
 mod evaluator;
 mod builtin;
 mod repl;
+mod environment;
 
 fn main() {
     let reader = stdin();
