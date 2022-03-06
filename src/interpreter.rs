@@ -1,14 +1,29 @@
 use std::io::{BufRead, BufReader, Read, Write};
+use crate::evaluator::Evaluator;
 use std::string::String;
 use crate::ast::Node;
-use crate::compiler::Compiler;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use crate::vm::VM;
 
 const PROMPT: &str = ">> ";
 
+const MONKEY_FACE: &str=
+r#"
+            __,__
+   .--.  .-"     "-.  .--.
+  / .. \/  .-. .-.  \/ .. \
+ | |  '|  /   Y   \  |'  | |
+ | \   \  \ 0 | 0 /  /   / |
+  \ '- ,\.-"""""""-./, -' /
+   ''-' /_   ^ ^   _\ '-''
+       |  \._   _./  |
+       \   \ '~' /   /
+        '._ '-=-' _.'
+           '-----'
+"#;
+
 pub fn start<R: Read, W: Write>(reader: R, mut writer: W) -> std::io::Result<()> {
+    let mut env = Evaluator::new();
     let mut reader = BufReader::new(reader);
     loop {
         write!(writer, "{}", PROMPT)?;
@@ -24,31 +39,18 @@ pub fn start<R: Read, W: Write>(reader: R, mut writer: W) -> std::io::Result<()>
             continue;
         }
 
-        // compile part
-        let mut comp = Compiler::new();
-        if let Err(msg) = comp.compile(Node::Program(program)) {
-            writer.write_all(format!("compile error occurred: {}\n", msg).as_ref())?;
-            continue;
-        }
-
-        let mut machine = VM::new(comp.byte_code());
-
-        let out = match machine.run() {
-            Err(err) => format!("runtime error occurred: {}", err),
-            Ok(_) => {
-                match machine.stack_top() {
-                    None => "NULL".to_string(),
-                    Some(obj) => format!("{}", obj)
-                }
-            },
+        let evaluated = env.eval(Node::Program(program));
+        let out = match evaluated {
+            None => "returned object is None".to_string(),
+            Some(obj) => format!("{}\n", obj),
         };
         writer.write_all(out.as_ref())?;
-        writer.write_all("\n".as_ref())?;
     }
 
 }
 
 fn print_parser_error<W: Write>(mut writer: W, errs: Vec<String>) -> std::io::Result<()>{
+    write!(writer, "{}", MONKEY_FACE)?;
     write!(writer, "Woops! We ran into some monkey business here!\n parser errors:\n")?;
     for msg in errs {
         write!(writer, "    {}\n", msg)?;

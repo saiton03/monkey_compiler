@@ -9,8 +9,11 @@ mod parser;
 mod object;
 mod evaluator;
 mod builtin;
-mod repl;
 mod environment;
+mod code;
+mod compiler;
+mod vm;
+mod repl;
 
 fn main() -> std::io::Result<()> {
     let reader = stdin();

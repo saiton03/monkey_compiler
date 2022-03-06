@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::btree_map::BTreeMap;
 use std::rc::Rc;
 use crate::ast::{Expression, Node, Program, Statement};
 use crate::builtin::BuiltinFunction;

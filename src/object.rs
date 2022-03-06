@@ -1,18 +1,18 @@
-use std::collections::BTreeMap;
+use std::collections::btree_map::BTreeMap;
 use std::fmt;
 use std::fmt::Formatter;
 use crate::ast::{Expression, Statement};
 use crate::builtin::BuiltinFunction;
 use crate::environment::Environment;
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct KeyValue {
     pub key: HashKey,
     pub value: Box<Object>,
 }
 
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum  HashKey {
     Integer(i64),
     String(String),
@@ -42,7 +42,7 @@ impl HashKey {
     }
 }
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Object {
     Integer(i64),
     String(String),

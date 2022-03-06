@@ -5,7 +5,7 @@ use crate::object::Object;
 
 pub type BuiltinFn = fn(args: Vec<Object>) -> Object;
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct BuiltinFunction {
     name: String,
     func: BuiltinFn

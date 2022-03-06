@@ -1,9 +1,9 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::btree_map::BTreeMap;
 use std::rc::Rc;
 use crate::object::Object;
 
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Environment {
     store: BTreeMap<String, Object>,
     outer: Option<Rc<RefCell<Environment>>>,

@@ -457,9 +457,8 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
-    use std::collections::BTreeMap;
+    use std::collections::btree_map::BTreeMap;
     use crate::ast::{Expression, Statement};
-    use crate::ast::Expression::PrefixExpression;
     use crate::lexer::Lexer;
     use crate::parser::Parser;
 
