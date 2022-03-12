@@ -36,10 +36,7 @@ pub fn start<R: Read, W: Write>(reader: R, mut writer: W) -> std::io::Result<()>
         let out = match machine.run() {
             Err(err) => format!("runtime error occurred: {}", err),
             Ok(_) => {
-                match machine.stack_top() {
-                    None => "NULL".to_string(),
-                    Some(obj) => format!("{}", obj)
-                }
+                format!("{}", machine.last_popped_stack_elem())
             },
         };
         writer.write_all(out.as_ref())?;

@@ -81,8 +81,8 @@ pub type Opcode = u8;
 
 #[derive(Eq, PartialEq)]
 pub struct Definition<'a> {
-    name: &'a str,
-    operand_width: &'a [i32],
+    pub name: &'a str,
+    pub operand_width: &'a [i32],
 }
 
 pub const DEFINITIONS: &[Definition] = &[
@@ -93,7 +93,51 @@ pub const DEFINITIONS: &[Definition] = &[
     Definition {
         name: "OpAdd",
         operand_width: &[],
-    }
+    },
+    Definition {
+        name: "OpPop",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpSub",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpMul",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpDiv",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpTrue",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpFalse",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpEqual",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpNotEqual",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpGreaterThan",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpMinus",
+        operand_width: &[],
+    },
+    Definition {
+        name: "OpBang",
+        operand_width: &[],
+    },
 ];
 
 pub fn lookup(op_code: &Operation) -> &Definition {
@@ -105,6 +149,17 @@ pub fn lookup(op_code: &Operation) -> &Definition {
 pub enum Operation {
     OpConstant,
     OpAdd,
+    OpPop,
+    OpSub,
+    OpMul,
+    OpDiv,
+    OpTrue,
+    OpFalse,
+    OpEqual,
+    OpNotEqual,
+    OpGreaterThan, // less thanはオペランドの順番を入れ替えることで代用
+    OpMinus,
+    OpBang
 }
 
 impl Operation {
@@ -112,6 +167,17 @@ impl Operation {
         match byte {
             0 => Some(Operation::OpConstant),
             1 => Some(Operation::OpAdd),
+            2 => Some(Operation::OpPop),
+            3 => Some(Operation::OpSub),
+            4 => Some(Operation::OpMul),
+            5 => Some(Operation::OpDiv),
+            6 => Some(Operation::OpTrue),
+            7 => Some(Operation::OpFalse),
+            8 => Some(Operation::OpEqual),
+            9 => Some(Operation::OpNotEqual),
+            10 => Some(Operation::OpGreaterThan),
+            11 => Some(Operation::OpMinus),
+            12 => Some(Operation::OpBang),
             _ => None,
         }
     }
@@ -124,10 +190,7 @@ impl Operation {
 
 impl fmt::Display for Operation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Operation::OpConstant => write!(f, "OpConstant"),
-            Operation::OpAdd => write!(f, "OpAdd"),
-        }
+        write!(f, "{}", DEFINITIONS[self.as_byte() as usize].name)
     }
 }
 

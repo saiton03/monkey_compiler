@@ -24,11 +24,24 @@ impl Compiler {
                 Ok(())
             },
             Node::Statement(stmt) => match stmt {
-                Statement::ExpressionStatement(exp) => self.compile(Node::Expression(exp)),
+                Statement::ExpressionStatement(exp) => {
+                    self.compile(Node::Expression(exp))?;
+                    self.emit(Operation::OpPop, vec![]);
+                    Ok(())
+                },
                 _ => unimplemented!()
             }
             Node::Expression(exp) => match exp {
                 Expression::InfixExpression {operation, left, right} => {
+                    if &operation == "<" {
+                        self.compile(Node::Expression(*right))?;
+                        self.compile(Node::Expression(*left))?;
+
+                        self.emit(Operation::OpGreaterThan, vec![]);
+                        return Ok(());
+                    }
+
+
                     self.compile(Node::Expression(*left))?;
                     self.compile(Node::Expression(*right))?;
 
@@ -36,7 +49,39 @@ impl Compiler {
                         "+" => {
                             self.emit(Operation::OpAdd, vec![]);
                         },
+                        "-" => {
+                            self.emit(Operation::OpSub, vec![]);
+                        },
+                        "*" => {
+                            self.emit(Operation::OpMul, vec![]);
+                        },
+                        "/" => {
+                            self.emit(Operation::OpDiv, vec![]);
+                        },
+                        ">" => {
+                            self.emit(Operation::OpGreaterThan, vec![]);
+                        },
+                        "==" => {
+                            self.emit(Operation::OpEqual, vec![]);
+                        },
+                        "!=" => {
+                            self.emit(Operation::OpNotEqual, vec![]);
+                        },
                         _ => return Err(format!("unknown operator {}", operation))
+                    }
+                    Ok(())
+                },
+                Expression::PrefixExpression {operation, right} => {
+                    self.compile(Node::Expression(*right))?;
+
+                    match operation.as_ref() {
+                        "!" => {
+                            self.emit(Operation::OpBang, vec![]);
+                        },
+                        "-" => {
+                            self.emit(Operation::OpMinus, vec![]);
+                        },
+                        _ => return Err(format!("unknown operator {}", operation)),
                     }
                     Ok(())
                 }
@@ -44,6 +89,14 @@ impl Compiler {
                     let integer = Object::Integer(i);
                     let pos = self.add_constant(integer) as i32;
                     self.emit(Operation::OpConstant, vec![pos]);
+                    Ok(())
+                },
+                Expression::Boolean(b) => {
+                    if b {
+                        self.emit(Operation::OpTrue, vec![]);
+                    } else {
+                        self.emit(Operation::OpFalse, vec![]);
+                    }
                     Ok(())
                 }
                 _ => unimplemented!(),
@@ -103,8 +156,150 @@ mod test {
                     Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
                     Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
                     Instructions::new(make(Operation::OpAdd.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
                 ]
-            }
+            },
+            CompilerTestCase {
+                input: "1 - 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpSub.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
+                ]
+            },
+            CompilerTestCase {
+                input: "1 * 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpMul.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
+                ]
+            },
+            CompilerTestCase {
+                input: "1 / 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpDiv.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
+                ]
+            },
+            CompilerTestCase {
+                input: "-1",
+                exp_constants: vec![Integer(1)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpMinus.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
+                ]
+            },
+            CompilerTestCase {
+                input: "1; 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap())
+                ]
+            },
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_boolean_expressions() {
+        let tests = vec![
+            CompilerTestCase {
+                input: "true",
+                exp_constants: vec![],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "false",
+                exp_constants: vec![],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpFalse.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "1 > 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpGreaterThan.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "1 < 2",
+                exp_constants: vec![Integer(2), Integer(1)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpGreaterThan.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "1 == 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpEqual.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "1 != 2",
+                exp_constants: vec![Integer(1), Integer(2)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpNotEqual.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "true == false",
+                exp_constants: vec![],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpFalse.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpEqual.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "true != false",
+                exp_constants: vec![],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpFalse.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpNotEqual.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "!true",
+                exp_constants: vec![],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpBang.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
         ];
         run_compiler_tests(tests);
     }

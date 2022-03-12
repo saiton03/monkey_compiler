@@ -5,6 +5,9 @@ use crate::object::Object;
 
 const STACK_SIZE: usize = 2048;
 
+const TRUE: Object = Object::Boolean(true);
+const FALSE: Object = Object::Boolean(false);
+
 pub struct VM {
     constants: Vec<Object>,
     instructions: Instructions,
@@ -28,7 +31,7 @@ impl VM {
         if self.sp == 0 {
             None
         } else {
-            Some(self.stack[self.sp-1].clone())
+            Some(self.stack[self.sp - 1].clone())
         }
     }
 
@@ -52,6 +55,10 @@ impl VM {
         }
     }
 
+    pub fn last_popped_stack_elem(&self) -> Object {
+        self.stack[self.sp].clone()
+    }
+
     pub fn run(&mut self) -> Result<(), String> {
         //println!("{:?}", self.instructions.to_string());
         let mut ip: usize = 0;
@@ -67,15 +74,28 @@ impl VM {
 
                         self.push(self.constants[const_idx as usize].clone())?;
                     },
-                    Operation::OpAdd => {
-                        let right = self.pop()?;
-                        let left = self.pop()?;
-                        if let (Object::Integer(right), Object::Integer(left)) = (&right, &left) {
-                            self.push(Object::Integer(right+left))?;
-                        } else {
-                            return Err(format!("invalid operand for add: left {}, right {}", left, right));
-                        }
+                    Operation::OpAdd| Operation::OpSub | Operation::OpMul | Operation::OpDiv => {
+                        self.execute_binary_operation(op)?;
+                    },
+                    Operation::OpPop => {
+                        self.pop()?;
+                    },
+                    Operation::OpTrue => {
+                        self.push(TRUE)?;
+                    },
+                    Operation::OpFalse => {
+                        self.push(FALSE)?;
+                    },
+                    Operation::OpEqual | Operation::OpNotEqual | Operation::OpGreaterThan => {
+                        self.execute_comparison(op)?;
+                    },
+                    Operation::OpBang => {
+                        self.execute_bang_operator()?;
+                    },
+                    Operation::OpMinus => {
+                        self.execute_minus_operator()?;
                     }
+                    _ => unimplemented!(),
                 },
                 None => return Err(format!("op code {} is invalid: pos {}", self.instructions[ip], ip)),
             }
@@ -84,7 +104,74 @@ impl VM {
         Ok(())
     }
 
+    fn execute_binary_operation(&mut self, op: Operation) -> Result<(),String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+        if let (Object::Integer(right), Object::Integer(left)) = (&right, &left) {
+            let result = match op {
+                Operation::OpAdd => left+right,
+                Operation::OpSub => left-right,
+                Operation::OpMul => left*right,
+                Operation::OpDiv => left/right,
+                other => return Err(format!("operator {} is invalid for infix expression between integers", other))
+            };
+            //println!("{} {} {} {}", right, op, left, result);
+            self.push(Object::Integer(result))
+        } else {
+            Err(format!("invalid operand: left {}, right {}", left, right))
+        }
+    }
 
+    fn execute_comparison(&mut self, op: Operation) -> Result<(),String> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+        if let (Object::Integer(right), Object::Integer(left)) = (&right, &left) {
+            self.execute_integer_comparison(op, *left, *right)
+        } else {
+            match op {
+                Operation::OpEqual => self.push(native_boolean_object(right == left)),
+                Operation::OpNotEqual => self.push(native_boolean_object(right != left)),
+                other => Err(format!("invalid operand  {}", other)),
+            }
+        }
+
+    }
+
+    fn execute_integer_comparison(&mut self, op: Operation, left: i64, right: i64) -> Result<(),String>{
+        match op {
+            Operation::OpEqual => self.push(native_boolean_object(left == right)),
+            Operation::OpNotEqual => self.push(native_boolean_object(left != right)),
+            Operation::OpGreaterThan => self.push(native_boolean_object(left > right)),
+            _ => Err(format!("unknown operator {}", op))
+        }
+    }
+
+
+    fn execute_bang_operator(&mut self) -> Result<(), String> {
+        let operand = self.pop()?;
+        match operand {
+            TRUE => self.push(FALSE),
+            FALSE => self.push(TRUE),
+            _ => self.push(FALSE)
+        }
+    }
+
+    fn execute_minus_operator(&mut self) -> Result<(), String> {
+        let operand = self.pop()?;
+        match operand {
+            Object::Integer(i) => self.push(Object::Integer(-i)),
+            _ => Err(format!("unsupported type for negation: {}", operand))
+        }
+    }
+
+}
+
+fn native_boolean_object(input: bool) -> Object {
+    if input {
+        Object::Boolean(true)
+    } else {
+        Object::Boolean(false)
+    }
 }
 
 #[cfg(test)]
@@ -102,10 +189,40 @@ mod tests {
             VMTestCase {input: "1", expected: Object::Integer(1)},
             VMTestCase {input: "2", expected: Object::Integer(2)},
             VMTestCase {input: "1 + 2", expected: Object::Integer(3)},
+            VMTestCase {input: "1 - 2", expected: Object::Integer(-1)},
+            VMTestCase {input: "3 * 2", expected: Object::Integer(6)},
+            VMTestCase {input: "6 / 2", expected: Object::Integer(3)},
+            VMTestCase {input: "6 + 2 * 2", expected: Object::Integer(10)},
+            VMTestCase {input: "-5", expected: Object::Integer(-5)},
+            VMTestCase {input: "-5 + 10", expected: Object::Integer(5)},
+            VMTestCase {input: "(5 + 10 * 2 + 15 /3) * 2 + -10", expected: Object::Integer(50)},
         ];
         run_vm_tests(tests);
     }
 
+    #[test]
+    fn test_boolean_expressions() {
+        let tests = vec![
+            VMTestCase { input: "true", expected: Object::Boolean(true)},
+            VMTestCase { input: "false", expected: Object::Boolean(false)},
+            VMTestCase { input: "1 < 2", expected: Object::Boolean(true)},
+            VMTestCase { input: "1 > 2", expected: Object::Boolean(false)},
+            VMTestCase { input: "1 < 1", expected: Object::Boolean(false)},
+            VMTestCase { input: "1 > 1", expected: Object::Boolean(false)},
+            VMTestCase { input: "1 == 1", expected: Object::Boolean(true)},
+            VMTestCase { input: "1 != 1", expected: Object::Boolean(false)},
+            VMTestCase { input: "true == true", expected: Object::Boolean(true)},
+            VMTestCase { input: "false == false", expected: Object::Boolean(true)},
+            VMTestCase { input: "true == false", expected: Object::Boolean(false)},
+            VMTestCase { input: "true != false", expected: Object::Boolean(true)},
+            VMTestCase { input: "(1 < 2) == true", expected: Object::Boolean(true)},
+            VMTestCase { input: "(1 < 2) == false", expected: Object::Boolean(false)},
+            VMTestCase { input: "(1 > 2) == true", expected: Object::Boolean(false)},
+            VMTestCase { input: "(1 > 2) == false", expected: Object::Boolean(true)},
+        ];
+
+        run_vm_tests(tests);
+    }
 
     fn parse(input: &str) -> Program {
         let l = Lexer::new(input);
@@ -113,6 +230,7 @@ mod tests {
         p.parse_program()
     }
 
+    /*
     fn test_integer_object(expected: i64, actual: Object) {
         let integer = match actual {
             Object::Integer(i) => i,
@@ -120,6 +238,16 @@ mod tests {
         };
         assert_eq!(integer, expected);
     }
+
+    fn test_boolean_object(expected: bool, actual: Object) {
+        let boolean = match actual {
+            Object::Boolean(b) => b,
+            other => panic!("object is not boolean, got {}", other)
+        };
+        assert_eq!(boolean, expected);
+    }
+     */
+
 
     struct VMTestCase<'a> {
         input: &'a str,
@@ -140,7 +268,8 @@ mod tests {
                 panic!("failed to run vm: {}", err);
             }
 
-            let stack_elem = vm.stack_top().expect("failed to get the top object in the stack, because the sp is 0");
+            //let stack_elem = vm.stack_top().expect("failed to get the top object in the stack, because the sp is 0");
+            let stack_elem = vm.last_popped_stack_elem();
             test_expected_object(tt.expected, stack_elem);
         }
     }
