@@ -1,17 +1,30 @@
+use std::rc::Rc;
 use crate::ast::{Expression, Node, Statement};
-use crate::code::{Instructions, make, Operation};
+use crate::code::{Instructions, make, Opcode, Operation};
 use crate::object::Object;
+
+#[derive(Default)]
+struct EmittedInstruction {
+    op_code: Opcode,
+    position: usize
+}
 
 pub struct Compiler {
     instructions: Instructions,
-    constants: Vec<Object>
+    constants: Vec<Object>,
+    
+    last_instruction: Rc<EmittedInstruction>,
+    previous_instruction: Rc<EmittedInstruction>
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Self {
             instructions: Instructions::new(vec![]),
-            constants: vec![]
+            constants: vec![],
+
+            last_instruction: Default::default(),
+            previous_instruction: Default::default(),
         }
     }
 
@@ -29,6 +42,12 @@ impl Compiler {
                     self.emit(Operation::OpPop, vec![]);
                     Ok(())
                 },
+                Statement::BlockStatement(stmts) => {
+                    for stmt in stmts {
+                        self.compile(Node::Statement(stmt))?;
+                    }
+                    Ok(())
+                }
                 _ => unimplemented!()
             }
             Node::Expression(exp) => match exp {
@@ -84,7 +103,40 @@ impl Compiler {
                         _ => return Err(format!("unknown operator {}", operation)),
                     }
                     Ok(())
-                }
+                },
+                Expression::IfExpression {condition, consequence, alternative} => {
+                    self.compile(Node::Expression(*condition))?;
+
+                    let jump_not_truthy_pos =self.emit(Operation::OpJumpNotTruthy, vec![9999]);
+
+                    self.compile(Node::Statement(*consequence))?;
+
+                    if self.last_instruction_is_pop() {
+                        self.remove_last_pop();
+                    }
+
+                    let jump_pos = self.emit(Operation::OpJump, vec![9999]);
+
+                    let after_consequence_pos = self.instructions.len();
+                    self.change_operand(jump_not_truthy_pos, after_consequence_pos as i32)?;
+
+                    match alternative {
+                        None => {
+                            self.emit(Operation::OpNull, vec![]);
+                        },
+                        Some(alt) => {
+                            self.compile(Node::Statement(*alt))?;
+
+                            if self.last_instruction_is_pop() {
+                                self.remove_last_pop();
+                            }
+                        }
+                    }
+                    let after_alternative_pos = self.instructions.len();
+                    self.change_operand(jump_pos, after_alternative_pos as i32)?;
+
+                    Ok(())
+                },
                 Expression::Integer(i) => {
                     let integer = Object::Integer(i);
                     let pos = self.add_constant(integer) as i32;
@@ -111,7 +163,9 @@ impl Compiler {
 
     fn emit(&mut self, op: Operation, operands: Vec<i32>) -> usize {
         let ins = make(op.as_byte(), &operands).expect("make instruction is failed");
-        self.add_instruction(ins)
+        let pos = self.add_instruction(ins);
+        self.set_last_instruction(op, pos);
+        pos
     }
 
     fn add_instruction(&mut self, mut ins: Vec<u8>) -> usize {
@@ -119,6 +173,39 @@ impl Compiler {
         self.instructions.append_vec(&mut ins);
         pos_new_instruction
     }
+
+    fn set_last_instruction(&mut self, op: Operation, pos: usize) {
+        self.previous_instruction = Rc::clone(&self.last_instruction);
+        self.last_instruction = Rc::new(EmittedInstruction{ op_code: op.as_byte(), position: pos });
+    }
+
+    fn last_instruction_is_pop(&self) -> bool {
+        self.last_instruction.op_code == Operation::OpPop.as_byte()
+    }
+
+
+    fn remove_last_pop(&mut self) {
+        self.instructions.pop();
+        self.last_instruction = Rc::clone(&self.previous_instruction);
+    }
+
+    fn replace_instructions(&mut self, pos: usize, new_instruction: Instructions) -> Result<(),String> {
+        if pos + new_instruction.len() > self.instructions.len() {
+            return Err("invalid position".to_string());
+        }
+        for i in 0..new_instruction.len() {
+            self.instructions[pos+i] = new_instruction[i];
+        }
+        Ok(())
+    }
+
+    fn change_operand(&mut self, pos: usize, operand: i32) -> Result<(), String> {
+        let op = self.instructions[pos];
+        let new_instruction = make(op, &vec![operand]).ok_or("making new instruction failed".to_string())?;
+
+        self.replace_instructions(pos, Instructions::new(new_instruction))
+    }
+
 
     pub fn byte_code(self) -> ByteCode {
         ByteCode{
@@ -297,6 +384,41 @@ mod test {
                 exp_instructions: vec![
                     Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
                     Instructions::new(make(Operation::OpBang.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_conditions() {
+        let tests = vec![
+            CompilerTestCase {
+                input: "if (true) { 10 }; 3333;",
+                exp_constants: vec![Integer(10), Integer(3333)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpJumpNotTruthy.as_byte(), &vec![10]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpJump.as_byte(), &vec![11]).unwrap()),
+                    Instructions::new(make(Operation::OpNull.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                ]
+            },
+            CompilerTestCase {
+                input: "if (true) { 10 } else { 20 }; 3333;",
+                exp_constants: vec![Integer(10), Integer(20), Integer(3333)],
+                exp_instructions: vec![
+                    Instructions::new(make(Operation::OpTrue.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpJumpNotTruthy.as_byte(), &vec![10]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![0]).unwrap()),
+                    Instructions::new(make(Operation::OpJump.as_byte(), &vec![13]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![1]).unwrap()),
+                    Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
+                    Instructions::new(make(Operation::OpConstant.as_byte(), &vec![2]).unwrap()),
                     Instructions::new(make(Operation::OpPop.as_byte(), &vec![]).unwrap()),
                 ]
             },

@@ -7,6 +7,7 @@ const STACK_SIZE: usize = 2048;
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
+const NULL: Object = Object::Null;
 
 pub struct VM {
     constants: Vec<Object>,
@@ -94,7 +95,25 @@ impl VM {
                     },
                     Operation::OpMinus => {
                         self.execute_minus_operator()?;
-                    }
+                    },
+                    Operation::OpJump => {
+                        let pos = BigEndian::read_u16(&self.instructions[ip+1..ip+3]);
+                        ip = pos as usize - 1;
+                    },
+                    Operation::OpJumpNotTruthy => {
+                        let pos = BigEndian::read_u16(&self.instructions[ip+1..ip+3]);
+                        // 先にconsequenceの方の処理の先頭に進めておく
+                        ip += 2;
+
+                        // stackのtopにあるのはconditionの評価値
+                        let condition = self.pop()?;
+                        if !is_truthy(condition) {
+                            ip = pos as usize -1;
+                        }
+                    },
+                    Operation::OpNull => {
+                        self.push(NULL)?;
+                    },
                     _ => unimplemented!(),
                 },
                 None => return Err(format!("op code {} is invalid: pos {}", self.instructions[ip], ip)),
@@ -152,6 +171,7 @@ impl VM {
         match operand {
             TRUE => self.push(FALSE),
             FALSE => self.push(TRUE),
+            NULL => self.push(TRUE),
             _ => self.push(FALSE)
         }
     }
@@ -174,6 +194,14 @@ fn native_boolean_object(input: bool) -> Object {
     }
 }
 
+fn is_truthy(obj: Object) -> bool {
+    match obj {
+        Object::Boolean(b) => b,
+        Object::Null => false,
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::{Node, Program};
@@ -181,7 +209,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::Parser;
     use crate::object::Object;
-    use crate::vm::VM;
+    use crate::vm::{NULL, VM};
 
     #[test]
     fn test_integer_arithmetic() {
@@ -224,30 +252,29 @@ mod tests {
         run_vm_tests(tests);
     }
 
+    #[test]
+    fn test_conditionals() {
+        let tests = vec![
+            VMTestCase {input: "if (true) { 10 }", expected: Object::Integer(10)},
+            VMTestCase {input: "if (true) { 10 } else { 20 }", expected: Object::Integer(10)},
+            VMTestCase {input: "if (false) { 10 } else { 20 }", expected: Object::Integer(20)},
+            VMTestCase {input: "if (1) { 10 }", expected: Object::Integer(10)},
+            VMTestCase {input: "if (1 < 2) { 10 }", expected: Object::Integer(10)},
+            VMTestCase {input: "if (1 < 2) { 10 } else { 20 }", expected: Object::Integer(10)},
+            VMTestCase {input: "if (1 > 2) { 10 } else { 20 }", expected: Object::Integer(20)},
+            VMTestCase {input: "if (1 > 2) { 10 }", expected: NULL},
+            VMTestCase {input: "if (false) { 10 }", expected: NULL},
+            VMTestCase {input: "!(if (false) { 5; })", expected: Object::Boolean(true)},
+            VMTestCase {input: "if (if (false) { 5 }) { 10 } else { 20 }", expected: Object::Integer(20)},
+        ];
+        run_vm_tests(tests);
+    }
+
     fn parse(input: &str) -> Program {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         p.parse_program()
     }
-
-    /*
-    fn test_integer_object(expected: i64, actual: Object) {
-        let integer = match actual {
-            Object::Integer(i) => i,
-            other => panic!("object is not integer, got {}", other)
-        };
-        assert_eq!(integer, expected);
-    }
-
-    fn test_boolean_object(expected: bool, actual: Object) {
-        let boolean = match actual {
-            Object::Boolean(b) => b,
-            other => panic!("object is not boolean, got {}", other)
-        };
-        assert_eq!(boolean, expected);
-    }
-     */
-
 
     struct VMTestCase<'a> {
         input: &'a str,

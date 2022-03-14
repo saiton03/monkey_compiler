@@ -58,6 +58,10 @@ impl Instructions {
     pub fn to_vec(self) -> Vec<u8> {
         self.0
     }
+
+    pub fn pop(&mut self) {
+        self.0.pop();
+    }
 }
 
 impl ops::Index<usize> for Instructions {
@@ -65,6 +69,12 @@ impl ops::Index<usize> for Instructions {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
+    }
+}
+
+impl ops::IndexMut<usize> for Instructions {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
     }
 }
 
@@ -138,6 +148,18 @@ pub const DEFINITIONS: &[Definition] = &[
         name: "OpBang",
         operand_width: &[],
     },
+    Definition {
+        name: "OpJumpNotTruthy",
+        operand_width: &[2],
+    },
+    Definition {
+        name: "OpJump",
+        operand_width: &[2],
+    },
+    Definition {
+        name: "OpNull",
+        operand_width: &[],
+    },
 ];
 
 pub fn lookup(op_code: &Operation) -> &Definition {
@@ -159,7 +181,10 @@ pub enum Operation {
     OpNotEqual,
     OpGreaterThan, // less thanはオペランドの順番を入れ替えることで代用
     OpMinus,
-    OpBang
+    OpBang,
+    OpJumpNotTruthy,
+    OpJump,
+    OpNull
 }
 
 impl Operation {
@@ -178,6 +203,9 @@ impl Operation {
             10 => Some(Operation::OpGreaterThan),
             11 => Some(Operation::OpMinus),
             12 => Some(Operation::OpBang),
+            13 => Some(Operation::OpJumpNotTruthy),
+            14 => Some(Operation::OpJump),
+            15 => Some(Operation::OpNull),
             _ => None,
         }
     }

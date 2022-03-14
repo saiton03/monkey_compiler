@@ -313,8 +313,6 @@ if(5<10) {
                 exp_token_type: TokenType::RPAREN,
                 exp_literal: ")".to_string()
             },
-
-            // TODO: rest
         ];
 
         let mut l = Lexer::new(input);
